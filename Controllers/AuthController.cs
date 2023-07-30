@@ -35,37 +35,34 @@ namespace DotnetAPI.Controllers
                 IEnumerable<string> existeUser = _dapper.LoadData<string>(sqlCheckUserExists);
                 if(existeUser.Count().Equals(0))
                 {
-                    byte[] passwordSalt = new byte[128 /8];
-                    using(RandomNumberGenerator rng = RandomNumberGenerator.Create())
+                    UserForLoginDto userForSetPassword = new UserForLoginDto(){
+                        Email = userForRegistrationDto.Email, 
+                        Password = userForRegistrationDto.Password
+                    };
+                    if(_authHelper.setPassword(userForSetPassword))
                     {
-                        rng.GetNonZeroBytes(passwordSalt);
-                    }
-                    byte[] passwordHash = _authHelper.GetPasswordHash(userForRegistrationDto.Password,passwordSalt);
-                    string sqlAddAuth = @"INSERT INTo TutorialAppSchema.Auth([Email],
-                                        [PasswordHash],
-                                        [PasswordSalt]) VALUES ('"+userForRegistrationDto.Email+"',@PasswordHash,@PasswordSalt)";
-                    List<SqlParameter> sqlParameters = new List<SqlParameter>();
-                    SqlParameter passwordSaltParameter = new SqlParameter("PasswordSalt", System.Data.SqlDbType.VarBinary);
-                    passwordSaltParameter.Value = passwordSalt;
-                    SqlParameter passwordHashParameter = new SqlParameter("PasswordHash", System.Data.SqlDbType.VarBinary);
-                    passwordHashParameter.Value = passwordHash;
-                    sqlParameters.Add(passwordSaltParameter);
-                    sqlParameters.Add(passwordHashParameter);
-                    if(_dapper.ExecutesqlwithParameters(sqlAddAuth, sqlParameters))
-                    {
-                    string sqlAddUser = @"
-                    INSERT INTO TutorialAppSchema.Users(
-                            [FirstName],
-                            [LastName],
-                            [Email],
-                            [Gender],
-                            [Active]
-                        ) VALUES ("+
-                        "'" + userForRegistrationDto.FirstName +
-                        "','"+userForRegistrationDto.LastName+ 
-                        "','"+userForRegistrationDto.Email+
-                        "','"+userForRegistrationDto.Gender+
-                        "', 1 )";
+                        string sqlAddUser = @"EXEC TutorialAppSchema.spUser_Upsert
+                                            @FirstName = '"+ userForRegistrationDto.FirstName+
+                                            "', @LastName  = '"+ userForRegistrationDto.LastName+ 
+                                            "', @Email = '"+ userForRegistrationDto.Email+
+                                            "', @Gender = '"+ userForRegistrationDto.Gender+
+                                            "', @Active = 1 " +
+                                            ", @JobTitle = '" + userForRegistrationDto.JobTitle +
+                                            "', @Department= '" + userForRegistrationDto.Department +
+                                            "', @Salary = '" + userForRegistrationDto.Salary +"'";
+                    // string sqlAddUser = @"
+                    // INSERT INTO TutorialAppSchema.Users(
+                    //         [FirstName],
+                    //         [LastName],
+                    //         [Email],
+                    //         [Gender],
+                    //         [Active]
+                    //     ) VALUES ("+
+                    //     "'" + userForRegistrationDto.FirstName +
+                    //     "','"+userForRegistrationDto.LastName+ 
+                    //     "','"+userForRegistrationDto.Email+
+                    //     "','"+userForRegistrationDto.Gender+
+                    //     "', 1 )";
                         if (_dapper.ExecuteSql(sqlAddUser)){
                              return Ok();
                         }
@@ -77,6 +74,17 @@ namespace DotnetAPI.Controllers
             }
             throw new Exception("Password do not match");
         }
+
+        [HttpPut("ResetPassword")]
+        public IActionResult ResetPassword(UserForLoginDto userForSetPassword)
+        {
+            if (_authHelper.setPassword(userForSetPassword))
+            {
+                return Ok();
+            }
+            throw new Exception("Faild to Update Password!");
+        }
+
         [AllowAnonymous]
         [HttpPost("Login")]
         public IActionResult Login(UserForLoginDto userForLoginDto)
