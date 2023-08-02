@@ -1,7 +1,9 @@
+using System.Data;
 using System.IdentityModel.Tokens.Jwt;
 using System.Security.Claims;
 using System.Security.Cryptography;
 using System.Text;
+using Dapper;
 using DotnetAPI.Data;
 using DotnetAPI.DtosModels;
 using DotnetAPI.Helpers;
@@ -89,12 +91,20 @@ namespace DotnetAPI.Controllers
         [HttpPost("Login")]
         public IActionResult Login(UserForLoginDto userForLoginDto)
         {
-            string sqlForHashAndSalt = @"SELECT
-                    [PasswordHash],
-                    [PasswordSalt] from TutorialAppSchema.Auth WHERE Email = '" +userForLoginDto.Email+ "'";
-            UserForLoginConfirmationDto userForLoginConfirmation = _dapper.LoadDataSingle<
-            UserForLoginConfirmationDto>(sqlForHashAndSalt);
+            string sqlForHashAndSalt = @"EXEC TutorialAppSchema.spLoginConfirmation_Get @Email = @EmailParam";
+
+            DynamicParameters sqlParameters = new DynamicParameters();
+
+            // SqlParameter emailParameter = new SqlParameter("@EmailParam", System.Data.SqlDbType.VarChar);
+            // emailParameter.Value = userForLoginDto.Email;
+            // sqlParameters.Add(emailParameter);
+
+            sqlParameters.Add("@EmailParam",userForLoginDto.Email, DbType.String);
+
+            UserForLoginConfirmationDto userForLoginConfirmation = _dapper.LoadDataSinglewithParameters<UserForLoginConfirmationDto>(sqlForHashAndSalt,sqlParameters);
+
             byte[] passwordHash = _authHelper.GetPasswordHash(userForLoginDto.Password, userForLoginConfirmation.PasswordSalt);
+
             for(int index = 0; index< passwordHash.Length; index++){
                 if(passwordHash[index] != userForLoginConfirmation.PasswordHash[index]){
                     return StatusCode(401,"Incorrect password!");
@@ -106,10 +116,11 @@ namespace DotnetAPI.Controllers
                 {"token", _authHelper.CreateToken(userId)}
             });
         }
+
         [HttpGet("RefershToken")]
         public string RefershToken()
         {
-            string sqlGetUserId = @"SELECT [UserId] FROM TutorialAppSchema.Users WHERE UserId = '" + User.FindFirst("UserId")?.Value +"'";
+            string sqlGetUserId = @"SELECT [UserId] FROM TutorialAppSchema.Users WHERE UserId = '" + User.FindFirst("userId")?.Value +"'";
             int userId = _dapper.LoadDataSingle<int>(sqlGetUserId);
             return _authHelper.CreateToken(userId);
         }
